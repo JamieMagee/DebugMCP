@@ -61,6 +61,29 @@ A state change is considered meaningful when any of these change:
 
 When debugging stops, the handler prompts AI agents to consider whether they found the root cause or just a symptom, encouraging deeper investigation.
 
+### Secret Redaction
+
+Variable inspection is the point where live process memory crosses the trust boundary into
+an AI agent (and usually a remote model provider). Two controls apply there:
+
+**Data minimization.** `handleGetVariables` requires an explicit `variableNames` list
+(validated by `normalizeRequestedNames()`: non-empty, no wildcards, capped at
+`maxRequestedVariables`) and returns only those variables. Unknown names are reported back
+so the caller gets feedback instead of silence. `handleListVariableNames` exists for
+discovery and returns names and types **only** — it never emits a value, so it needs no
+redaction.
+
+**Redaction.** Values that are returned still pass through `src/utils/secretRedaction.ts`,
+which withholds credential-looking values by name (`api_key`, `password`, `token`, …) and by
+content (JWT, PEM private key, `AKIA…`, `ghp_…`, `Bearer …`, `Password=…`, …).
+`handleEvaluateExpression` is covered too, since evaluating `os.environ` is the trivial
+bypass for per-variable controls. Null-ish values are deliberately left intact so
+missing-credential bugs stay debuggable. The decision is made from the variable's own name
+and its own value only — a struct is never descended into, so a `config` object that happens
+to contain a `password` field is returned intact. Controlled by
+`debugmcp.redactSecrets` (default `true`), read per call so the setting applies without a
+restart.
+
 ## Key Code Locations
 
 - Class definition: `src/debuggingHandler.ts`
@@ -68,6 +91,8 @@ When debugging stops, the handler prompts AI agents to consider whether they fou
 - State change detection: `waitForStateChange()`, `hasStateChanged()`
 - Session waiting: `waitForActiveDebugSession()`
 - State formatting: `formatDebugState()`
+- Variable selection: `handleGetVariables()`, `handleListVariableNames()`, `normalizeRequestedNames()`
+- Secret redaction: `isSecretRedactionEnabled()`, `src/utils/secretRedaction.ts`
 
 ## Design Patterns
 

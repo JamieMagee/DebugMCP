@@ -107,6 +107,8 @@ export class ControlServer {
 				return this.handler.handleListBreakpoints();
 			case 'handleGetVariables':
 				return this.handler.handleGetVariables(args);
+			case 'handleListVariableNames':
+				return this.handler.handleListVariableNames(args);
 			case 'handleEvaluateExpression':
 				return this.handler.handleEvaluateExpression(args);
 			default:

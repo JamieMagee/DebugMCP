@@ -5,6 +5,7 @@ import { DebugConfigurationManager, IDebugConfigurationManager } from './utils/d
 import { DebugState } from './debugState';
 import { IDebuggingExecutor } from './debuggingExecutor';
 import { logger } from './utils/logger';
+import { redactExpressionResult, redactVariableValue, REDACTION_NOTICE } from './utils/secretRedaction';
 
 /**
  * Interface for debugging handler operations
@@ -23,7 +24,8 @@ export interface IDebuggingHandler {
     handleRemoveBreakpoint(args: { fileFullPath: string; line: number }): Promise<string>;
     handleClearAllBreakpoints(): Promise<string>;
     handleListBreakpoints(): Promise<string>;
-    handleGetVariables(args: { scope?: 'local' | 'global' | 'all' }): Promise<string>;
+    handleGetVariables(args: { variableNames: string[]; scope?: 'local' | 'global' | 'all' }): Promise<string>;
+    handleListVariableNames(args?: { scope?: 'local' | 'global' | 'all' }): Promise<string>;
     handleEvaluateExpression(args: { expression: string }): Promise<string>;
 }
 
@@ -421,47 +423,224 @@ export class DebuggingHandler implements IDebuggingHandler {
     }
 
     /**
-     * Get variables from current debug context
+     * Whether secret-looking runtime values should be withheld from responses.
+     * Read per call so the setting takes effect without restarting the server.
      */
-    public async handleGetVariables(args: { scope?: 'local' | 'global' | 'all' }): Promise<string> {
-        const { scope = 'all' } = args;
-        
+    private isSecretRedactionEnabled(): boolean {
         try {
-            if (!(await this.executor.hasActiveSession())) {
-                throw new Error('Debug session is not ready. Start debugging first and ensure execution is paused.');
+            return vscode.workspace.getConfiguration('debugmcp').get<boolean>('redactSecrets', true);
+        } catch (error) {
+            // Fail closed: if the setting cannot be read, keep redacting.
+            logger.warn('Unable to read debugmcp.redactSecrets, defaulting to enabled', error);
+            return true;
+        }
+    }
+
+    /**
+     * Maximum number of variable names accepted in a single request. Keeps the
+     * tool a targeted lookup rather than a scope dump by another name.
+     */
+    private readonly maxRequestedVariables: number = 50;
+
+    /**
+     * Resolve the frame to inspect, failing with an actionable message when the
+     * debugger is not paused.
+     */
+    private async requireActiveFrameId(): Promise<number> {
+        if (!(await this.executor.hasActiveSession())) {
+            throw new Error('Debug session is not ready. Start debugging first and ensure execution is paused.');
+        }
+
+        const activeStackItem = vscode.debug.activeStackItem;
+        if (!activeStackItem || !('frameId' in activeStackItem)) {
+            throw new Error('No active stack frame. Make sure execution is paused at a breakpoint.');
+        }
+
+        return activeStackItem.frameId;
+    }
+
+    /**
+     * Validate the caller-supplied variable names. Explicit names are required:
+     * returning every variable in scope hands the caller unrelated process
+     * state (credentials, environment dumps) it never asked for.
+     */
+    private normalizeRequestedNames(variableNames: string[] | undefined): string[] {
+        if (!Array.isArray(variableNames) || variableNames.length === 0) {
+            throw new Error(
+                "'variableNames' is required: name the variables you want (e.g. ['user', 'response']). " +
+                'Use list_variable_names to discover what is in scope without reading any values.'
+            );
+        }
+
+        const names = variableNames
+            .filter((name): name is string => typeof name === 'string')
+            .map(name => name.trim())
+            .filter(name => name.length > 0);
+
+        if (names.length === 0) {
+            throw new Error("'variableNames' contained no usable names.");
+        }
+
+        if (names.some(name => name === '*' || name.toLowerCase() === 'all')) {
+            throw new Error(
+                "Wildcards are not supported: name each variable explicitly, or call list_variable_names to see what is in scope."
+            );
+        }
+
+        if (names.length > this.maxRequestedVariables) {
+            throw new Error(
+                `Too many variables requested (${names.length}, max ${this.maxRequestedVariables}). ` +
+                'Inspect the ones relevant to your hypothesis instead of the whole scope.'
+            );
+        }
+
+        return [...new Set(names)];
+    }
+
+    /**
+     * The canonical name for a DAP variable: the one an agent can pass back to
+     * `get_variables_values` or `evaluate_expression`.
+     *
+     * DAP splits these apart - `name` is for display and may carry an
+     * adapter-specific decoration (C#/vsdbg reports `config [Dictionary]`),
+     * while `evaluateName` is the real, evaluatable identifier. Prefer the
+     * latter; fall back to `name` verbatim, never parsed.
+     */
+    private static canonicalVariableName(variable: any): string {
+        const evaluateName = variable?.evaluateName;
+        if (typeof evaluateName === 'string' && evaluateName.trim().length > 0) {
+            return evaluateName.trim();
+        }
+
+        const rawName = variable?.name;
+        return typeof rawName === 'string' ? rawName.trim() : rawName;
+    }
+
+    /**
+     * Whether a DAP variable matches one of the requested names. Accepts the
+     * canonical name and the display name, both compared exactly.
+     */
+    private static matchesRequestedName(variable: any, requestedNames: string[]): boolean {
+        const rawName = variable?.name;
+        if (typeof rawName === 'string' && requestedNames.includes(rawName)) {
+            return true;
+        }
+
+        return requestedNames.includes(DebuggingHandler.canonicalVariableName(variable));
+    }
+
+    /**
+     * List the variable names (and types) visible at the current execution
+     * point, deliberately without any values, so an agent can discover what
+     * exists and then request only the ones it needs.
+     */
+    public async handleListVariableNames(args: { scope?: 'local' | 'global' | 'all' } = {}): Promise<string> {
+        const { scope = 'all' } = args;
+
+        try {
+            const frameId = await this.requireActiveFrameId();
+            const variablesData = await this.executor.getVariables(frameId, scope);
+
+            if (!variablesData.scopes || variablesData.scopes.length === 0) {
+                return 'No variable scopes available at current execution point.';
             }
 
-            const activeStackItem = vscode.debug.activeStackItem;
-            if (!activeStackItem || !('frameId' in activeStackItem)) {
-                throw new Error('No active stack frame. Make sure execution is paused at a breakpoint.');
+            let info = 'Variables in scope (names only - no values were read):\n';
+            info += '=====================================================\n\n';
+
+            for (const scopeItem of variablesData.scopes) {
+                info += `${scopeItem.name}:\n`;
+
+                if (scopeItem.error) {
+                    info += `  Error retrieving variables: ${scopeItem.error}\n`;
+                } else if (scopeItem.variables && scopeItem.variables.length > 0) {
+                    for (const variable of scopeItem.variables) {
+                        const name = DebuggingHandler.canonicalVariableName(variable);
+                        info += `  ${name}${variable.type ? ` (${variable.type})` : ''}\n`;
+                    }
+                } else {
+                    info += '  No variables in this scope\n';
+                }
+
+                info += '\n';
             }
 
-            const variablesData = await this.executor.getVariables(activeStackItem.frameId, scope);
+            info += "Use get_variables_values with the names you need, e.g. { \"variableNames\": [\"user\"] }.\n";
+            return info;
+        } catch (error) {
+            throw new Error(`Error listing variable names: ${error}`);
+        }
+    }
+
+    /**
+     * Get the values of specifically named variables in the current debug context.
+     */
+    public async handleGetVariables(args: { variableNames: string[]; scope?: 'local' | 'global' | 'all' }): Promise<string> {
+        const { scope = 'all' } = args;
+        const requestedNames = this.normalizeRequestedNames(args?.variableNames);
+
+        try {
+            const frameId = await this.requireActiveFrameId();
+            const variablesData = await this.executor.getVariables(frameId, scope);
             
             if (!variablesData.scopes || variablesData.scopes.length === 0) {
                 return 'No variable scopes available at current execution point.';
             }
 
             let variablesInfo = 'Variables:\n==========\n\n';
+            const redactSecrets = this.isSecretRedactionEnabled();
+            let redactedAny = false;
+            const foundNames = new Set<string>();
 
             for (const scopeItem of variablesData.scopes) {
-                variablesInfo += `${scopeItem.name}:\n`;
-                
+                const matches = (scopeItem.variables || []).filter((variable: any) =>
+                    DebuggingHandler.matchesRequestedName(variable, requestedNames));
+
                 if (scopeItem.error) {
-                    variablesInfo += `  Error retrieving variables: ${scopeItem.error}\n`;
-                } else if (scopeItem.variables && scopeItem.variables.length > 0) {
-                    for (const variable of scopeItem.variables) {
-                        variablesInfo += `  ${variable.name}: ${variable.value}`;
-                        if (variable.type) {
-                            variablesInfo += ` (${variable.type})`;
-                        }
-                        variablesInfo += '\n';
-                    }
-                } else {
-                    variablesInfo += '  No variables in this scope\n';
+                    variablesInfo += `${scopeItem.name}:\n  Error retrieving variables: ${scopeItem.error}\n\n`;
+                    continue;
                 }
-                
+
+                if (matches.length === 0) {
+                    continue;
+                }
+
+                variablesInfo += `${scopeItem.name}:\n`;
+                for (const variable of matches) {
+                    const name = DebuggingHandler.canonicalVariableName(variable);
+                    foundNames.add(name);
+                    if (typeof variable.name === 'string') {
+                        // So a caller who asked by the raw adapter name is not
+                        // then told that name was not found.
+                        foundNames.add(variable.name);
+                    }
+                    let value = variable.value;
+                    if (redactSecrets) {
+                        const result = redactVariableValue(name, variable.value);
+                        value = result.value;
+                        redactedAny = redactedAny || result.redacted;
+                    }
+                    variablesInfo += `  ${name}: ${value}`;
+                    if (variable.type) {
+                        variablesInfo += ` (${variable.type})`;
+                    }
+                    variablesInfo += '\n';
+                }
                 variablesInfo += '\n';
+            }
+
+            const missing = requestedNames.filter(name => !foundNames.has(name));
+            if (foundNames.size === 0) {
+                return `None of the requested variables (${requestedNames.join(', ')}) are visible at the current execution point. ` +
+                    'Use list_variable_names to see what is in scope, or evaluate_expression for nested/computed values.\n';
+            }
+            if (missing.length > 0) {
+                variablesInfo += `Not found in any scope: ${missing.join(', ')}. ` +
+                    'They may be out of scope here, or nested inside an object - try evaluate_expression.\n';
+            }
+
+            if (redactedAny) {
+                variablesInfo += `${REDACTION_NOTICE}\n`;
             }
 
             return variablesInfo;
@@ -490,9 +669,19 @@ export class DebuggingHandler implements IDebuggingHandler {
 
             if (response && response.result !== undefined) {
                 let resultText = `Expression: ${expression}\n`;
-                resultText += `Result: ${response.result}`;
+                let value = response.result;
+                let redacted = false;
+                if (this.isSecretRedactionEnabled()) {
+                    const result = redactExpressionResult(expression, response.result);
+                    value = result.value;
+                    redacted = result.redacted;
+                }
+                resultText += `Result: ${value}`;
                 if (response.type) {
                     resultText += ` (${response.type})`;
+                }
+                if (redacted) {
+                    resultText += `\n\n${REDACTION_NOTICE}`;
                 }
 
                 return resultText;

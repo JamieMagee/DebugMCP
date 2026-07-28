@@ -4,6 +4,17 @@ All notable changes to DebugMCP will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.3.0] - 2026-07-28
+
+### Changed
+- **`get_variables_values` now retrieves variables by name.** Pass an explicit `variableNames` array; only the variables you name are returned (max 50, no wildcards). Unknown names are reported back so the caller gets feedback instead of silence.
+
+### Added
+- **`list_variable_names` tool** - lists the names and types of variables at the current execution point without reading any values, so an agent can discover what is in scope and then request only what it needs.
+
+### Breaking
+- `get_variables_values` calls without a `variableNames` array now fail with an actionable error pointing at `list_variable_names`.
+
 ## [2.1.0] - 2026-06-23
 
 ### Added
