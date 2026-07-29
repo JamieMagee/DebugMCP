@@ -448,7 +448,7 @@ export class DebuggingHandler implements IDebuggingHandler {
     /**
      * Validate the caller-supplied variable names. Explicit names are required:
      * returning every variable in scope hands the caller unrelated process
-     * state (credentials, environment dumps) it never asked for.
+     * state it never asked for.
      */
     private normalizeRequestedNames(variableNames: string[] | undefined): string[] {
         if (!Array.isArray(variableNames) || variableNames.length === 0) {
