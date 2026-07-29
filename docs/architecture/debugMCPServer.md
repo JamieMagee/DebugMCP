@@ -120,7 +120,8 @@ error wins:
 | `add/remove_breakpoint` | Breakpoint management |
 | `clear_all_breakpoints` | Remove all breakpoints |
 | `list_breakpoints` | List active breakpoints |
-| `get_variables_values` | Inspect variable values |
+| `get_variables_values` | Read the values of specifically named variables |
+| `list_variable_names` | List variable names/types in scope, without values |
 | `evaluate_expression` | Evaluate expressions |
 
 ## Configuration
