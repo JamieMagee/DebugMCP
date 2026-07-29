@@ -80,9 +80,8 @@ content (JWT, PEM private key, `AKIA…`, `ghp_…`, `Bearer …`, `Password=…
 bypass for per-variable controls. Null-ish values are deliberately left intact so
 missing-credential bugs stay debuggable. The decision is made from the variable's own name
 and its own value only — a struct is never descended into, so a `config` object that happens
-to contain a `password` field is returned intact. Controlled by
-`debugmcp.redactSecrets` (default `true`), read per call so the setting applies without a
-restart.
+to contain a `password` field is returned intact. Redaction is unconditional — there is no
+setting to disable it.
 
 ## Key Code Locations
 
@@ -92,7 +91,7 @@ restart.
 - Session waiting: `waitForActiveDebugSession()`
 - State formatting: `formatDebugState()`
 - Variable selection: `handleGetVariables()`, `handleListVariableNames()`, `normalizeRequestedNames()`
-- Secret redaction: `isSecretRedactionEnabled()`, `src/utils/secretRedaction.ts`
+- Secret redaction: `src/utils/secretRedaction.ts`
 
 ## Design Patterns
 

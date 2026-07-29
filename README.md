@@ -290,8 +290,7 @@ Configure DebugMCP behavior in VSCode settings:
 {
   "debugmcp.serverPort": 3001,
   "debugmcp.timeoutInSeconds": 180,
-  "debugmcp.bindHost": ["127.0.0.1", "::1"],
-  "debugmcp.redactSecrets": true
+  "debugmcp.bindHost": ["127.0.0.1", "::1"]
 }
 ```
 
@@ -300,7 +299,6 @@ Configure DebugMCP behavior in VSCode settings:
 | `debugmcp.serverPort` | `3001` | Port number for the MCP server |
 | `debugmcp.timeoutInSeconds` | `180` | Timeout for debugging operations |
 | `debugmcp.bindHost` | `["127.0.0.1", "::1"]` | Network interface(s) the HTTP server binds to. Accepts a string or array of strings. See [Security model](#security-model) before changing. |
-| `debugmcp.redactSecrets` | `true` | Withhold secret-looking runtime values from `get_variables_values` / `evaluate_expression`. See [Security model](#security-model). |
 
 ### Security model
 
@@ -309,7 +307,7 @@ DebugMCP exposes powerful debugger primitives (`evaluate_expression`, `start_deb
 1. **Loopback-only bind.** The HTTP server binds to the IPv4 and IPv6 loopback addresses (`127.0.0.1` and `::1`) by default, so other hosts on your network cannot reach `http://<your-ip>:3001/mcp`. Binding both families ensures clients that resolve `localhost` to either family connect successfully. The `debugmcp.bindHost` setting (string or array of strings) lets you opt into a different interface (for example, when forwarding the port into a remote container), but doing so exposes the unauthenticated debugger to anything that can route to that address — do not point it at `0.0.0.0` or a LAN address on an untrusted network.
 2. **Host / Origin header validation.** Every request must carry a `Host` header naming a loopback address (`localhost`, `127.0.0.1`, or `[::1]`); any port suffix in the `Host` must also match the server's listening port. Requests with any other `Host` — including those that arrive via DNS rebinding from a malicious webpage — are rejected with HTTP 403. The same loopback check is applied to the `Origin` header when present.
 3. **Least-privilege variable inspection.** `get_variables_values` requires an explicit `variableNames` list (max 50, no wildcards) and returns only those variables. It no longer dumps every variable in scope, which previously handed the agent unrelated process state — credentials, tokens, whole `os.environ` / `process.env` objects — that it never asked for. Use `list_variable_names` to discover what exists; that tool returns names and types only and never reads a value.
-4. **Secret redaction on variable inspection.** Even for explicitly requested variables, values whose **name** looks credential-bearing (`api_key`, `password`, `token`, `connection_string`, …) or whose **content** matches a known credential shape (JWTs, PEM private keys, `AKIA…`, `ghp_…`, `sk-…`, `Bearer …`, `Password=…`, …) are replaced with `<redacted: possible secret>` before the response leaves the extension. The same applies to `evaluate_expression`, which is otherwise the trivial bypass. Secrets nested inside a rendered container (an environment mapping, a config object) are not scrubbed entry-by-entry — the decision is made from the variable's own name and value, so a struct is returned intact unless it is itself credential-named or its rendering carries a recognizable credential. Null-ish values (`None`, `undefined`, `''`) are never redacted so "my token is empty" bugs remain debuggable. Set `"debugmcp.redactSecrets": false` to disable — only do so if you accept that live credentials will be sent to your AI assistant.
+4. **Secret redaction on variable inspection.** Even for explicitly requested variables, values whose **name** looks credential-bearing (`api_key`, `password`, `token`, `connection_string`, …) or whose **content** matches a known credential shape (JWTs, PEM private keys, `AKIA…`, `ghp_…`, `sk-…`, `Bearer …`, `Password=…`, …) are replaced with `<redacted: possible secret>` before the response leaves the extension. The same applies to `evaluate_expression`, which is otherwise the trivial bypass. Secrets nested inside a rendered container (an environment mapping, a config object) are not scrubbed entry-by-entry — the decision is made from the variable's own name and value, so a struct is returned intact unless it is itself credential-named or its rendering carries a recognizable credential. Null-ish values (`None`, `undefined`, `''`) are never redacted so "my token is empty" bugs remain debuggable. Redaction is always on and cannot be turned off.
 
 
 ## FAQ

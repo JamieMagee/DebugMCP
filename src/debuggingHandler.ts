@@ -423,20 +423,6 @@ export class DebuggingHandler implements IDebuggingHandler {
     }
 
     /**
-     * Whether secret-looking runtime values should be withheld from responses.
-     * Read per call so the setting takes effect without restarting the server.
-     */
-    private isSecretRedactionEnabled(): boolean {
-        try {
-            return vscode.workspace.getConfiguration('debugmcp').get<boolean>('redactSecrets', true);
-        } catch (error) {
-            // Fail closed: if the setting cannot be read, keep redacting.
-            logger.warn('Unable to read debugmcp.redactSecrets, defaulting to enabled', error);
-            return true;
-        }
-    }
-
-    /**
      * Maximum number of variable names accepted in a single request. Keeps the
      * tool a targeted lookup rather than a scope dump by another name.
      */
@@ -588,7 +574,6 @@ export class DebuggingHandler implements IDebuggingHandler {
             }
 
             let variablesInfo = 'Variables:\n==========\n\n';
-            const redactSecrets = this.isSecretRedactionEnabled();
             let redactedAny = false;
             const foundNames = new Set<string>();
 
@@ -614,12 +599,9 @@ export class DebuggingHandler implements IDebuggingHandler {
                         // then told that name was not found.
                         foundNames.add(variable.name);
                     }
-                    let value = variable.value;
-                    if (redactSecrets) {
-                        const result = redactVariableValue(name, variable.value);
-                        value = result.value;
-                        redactedAny = redactedAny || result.redacted;
-                    }
+                    const result = redactVariableValue(name, variable.value);
+                    const value = result.value;
+                    redactedAny = redactedAny || result.redacted;
                     variablesInfo += `  ${name}: ${value}`;
                     if (variable.type) {
                         variablesInfo += ` (${variable.type})`;
@@ -669,13 +651,7 @@ export class DebuggingHandler implements IDebuggingHandler {
 
             if (response && response.result !== undefined) {
                 let resultText = `Expression: ${expression}\n`;
-                let value = response.result;
-                let redacted = false;
-                if (this.isSecretRedactionEnabled()) {
-                    const result = redactExpressionResult(expression, response.result);
-                    value = result.value;
-                    redacted = result.redacted;
-                }
+                const { value, redacted } = redactExpressionResult(expression, response.result);
                 resultText += `Result: ${value}`;
                 if (response.type) {
                     resultText += ` (${response.type})`;

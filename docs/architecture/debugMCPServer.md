@@ -128,4 +128,3 @@ error wins:
 
 - `debugmcp.serverPort`: Port number (default: 3001)
 - `debugmcp.timeoutInSeconds`: Operation timeout (default: 180)
-- `debugmcp.redactSecrets`: Withhold secret-looking variable/expression values (default: true, see `DebuggingHandler`)

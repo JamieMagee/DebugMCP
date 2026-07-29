@@ -19,8 +19,7 @@ export const REDACTION_PLACEHOLDER = '<redacted: possible secret>';
 export const REDACTION_NOTICE =
     `NOTE: values matching '${REDACTION_PLACEHOLDER}' were withheld because their name or ` +
     'content looks like a credential (key, token, password, connection string, ...). ' +
-    'Use debug-specific checks (type, length, is-null) instead of reading the raw value, ' +
-    'or set "debugmcp.redactSecrets": false in VS Code settings if you explicitly need it.';
+    'Use debug-specific checks (type, length, is-null) instead of reading the raw value.';
 
 /**
  * Names that mark a variable as credential-bearing.
