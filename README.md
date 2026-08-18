@@ -476,11 +476,11 @@ If DebugMCP has helped you debug faster, please consider giving it a star on Git
 
 ### Star History
 
-<a href="https://star-history.com/#microsoft/DebugMCP&Date">
+<a href="https://star-history.dera.page/#microsoft/DebugMCP&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=microsoft/DebugMCP&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=microsoft/DebugMCP&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=microsoft/DebugMCP&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=microsoft/DebugMCP&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=microsoft/DebugMCP&type=Date" />
+   <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=microsoft/DebugMCP&type=Date" />
  </picture>
 </a>
 
