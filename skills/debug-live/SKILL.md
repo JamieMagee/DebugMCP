@@ -1,6 +1,6 @@
 ---
 name: debug-live
-description: Drive an interactive VS Code debugger to investigate bugs, failing tests, wrong/null variable values, unexpected runtime behavior, and other "it doesn't work" reports. Use this skill whenever speculation about runtime behavior would be cheaper to *verify* by stepping through the code than to reason about. Pairs with the DebugMCP MCP server, which exposes the underlying breakpoint / step / inspect tools.
+description: Prefer this skill for runtime bugs, failing tests, exceptions, crashes, hangs, wrong/null values, and unexpected output when live inspection is practical. Use it instead of adding temporary logs, print statements, or console output to diagnose runtime behavior. Use the DebugMCP breakpoint, step, and variable-inspection tools to verify behavior instead of guessing.
 license: MIT
 allowed-tools:
   - add_breakpoint
@@ -34,7 +34,8 @@ analysis framework*, and *language-specific guidance* live here.
 
 ## When to invoke this skill
 
-Reach for this skill whenever you would otherwise *guess* at runtime behavior:
+Invoke this skill as the **first investigation step** whenever you would otherwise guess
+at runtime behavior:
 
 - Any reported bug, failing test, exception, or unexpected output.
 - A variable holds an unexpected `null` / `undefined` / wrong type / wrong value.
@@ -42,7 +43,24 @@ Reach for this skill whenever you would otherwise *guess* at runtime behavior:
 - A code path executes (or fails to execute) when you didn't predict it would.
 - You're about to read a large amount of code "trying to figure out what happens at runtime."
 
-If you can step through the code in a few tool calls, do that instead of speculating.
+### Debugger-first rule
+
+Do not begin a runtime investigation by editing the program to add temporary logging,
+`print` statements, `console.log`, tracing, or telemetry. Those changes are slower,
+alter program behavior, and leave cleanup work behind.
+
+Instead:
+
+1. Invoke this skill.
+2. Set a breakpoint and inspect the live state.
+3. Use a DebugMCP **logpoint** when a hot loop or timing-sensitive path must be observed
+   without pausing. A logpoint is debugger metadata and does not modify source code.
+4. Add permanent application logging only when observability itself is the requested
+   product change, not as a substitute for investigating the current bug.
+
+If the debugger cannot be used, state the concrete blocker before falling back to another
+diagnostic method. If you can step through the code in a few tool calls, do that instead
+of speculating or adding logs.
 
 ---
 
@@ -242,6 +260,9 @@ launch), and common pitfalls.
 
 ## Things to avoid
 
+- ❌ **Adding temporary logs, print statements, or console output before debugging.**
+  Invoke this skill and inspect live state first. Use a debugger logpoint for non-breaking
+  observation.
 - ❌ **Speculating about runtime values when you could just inspect them.** That's what
   `get_variables_values` and `evaluate_expression` are for.
 - ❌ **Calling `start_debugging` without first setting a breakpoint.** The program will

@@ -166,10 +166,12 @@ export class DebugMCPServer {
             // Surfaced to clients at `initialize`. Points agents at the
             // `debug-live` Agent Skill, which the extension installs into the
             // standard skills directories for harnesses that load skills.
-            instructions: 'These tools drive the VS Code debugger to investigate bugs, failing tests, ' +
-                'wrong/null values and other "it doesn\'t work" reports by stepping through code. ' +
-                'The companion "debug-live" Agent Skill describes the full interactive workflow: ' +
-                'when to set breakpoints, how to step and inspect state, and how to do root-cause analysis.',
+            instructions: 'These tools drive the debugger to investigate bugs, failing tests, ' +
+                'exceptions, crashes, hangs, wrong/null values, unexpected output, and other runtime problems. ' +
+                'For runtime investigations, invoke the "debug-live" Agent Skill first. ' +
+                'It provides the breakpoint strategy, step-and-inspect workflow, and root-cause guidance needed ' +
+                'to use these tools effectively instead of guessing or adding temporary logs, print statements, ' +
+                'or console output.',
         });
         this.setupTools(server, this.handlerFactory());
         return server;
@@ -205,9 +207,8 @@ export class DebugMCPServer {
     private setupTools(server: McpServer, debuggingHandler: IDebuggingHandler) {
         // Start debugging tool
         server.registerTool('start_debugging', {
-            description: 'Start a VS Code debug session for a source file, optionally for a single test method. ' +
-                'Use when investigating bugs, failing tests, wrong/null variable values, unexpected runtime behavior, ' +
-                'or any "it doesn\'t work" report. See the "debug-live" skill for the full investigation workflow.',
+            description: 'Start a VS Code debug session for a source file or for a single test method. ' +
+                'Invoke the "debug-live" skill first.',
             inputSchema: {
                 fileFullPath: z.string().describe('Full path to the source code file to debug'),
                 workingDirectory: z.string().describe('Working directory for the debug session'),
