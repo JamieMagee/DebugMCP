@@ -1,6 +1,6 @@
 ---
 name: debug-live
-description: Prefer this skill for runtime bugs, failing tests, exceptions, crashes, hangs, wrong/null values, and unexpected output when live inspection is practical. Use it instead of adding temporary logs, print statements, or console output to diagnose runtime behavior. Use the DebugMCP breakpoint, step, and variable-inspection tools to verify behavior instead of guessing.
+description: Guides root-cause investigations with debugging capabilities by setting breakpoints, starting a debug session, stepping through execution, inspecting variables, and tracing symptoms back to their origin. Prefer it for runtime bugs, failing tests, exceptions, crashes, hangs, wrong/null values, and unexpected output when live inspection is practical. Use this skill instead of modifying source code with temporary logs, print statements, or console output.
 license: MIT
 allowed-tools:
   - add_breakpoint

@@ -168,10 +168,9 @@ export class DebugMCPServer {
             // standard skills directories for harnesses that load skills.
             instructions: 'These tools drive the debugger to investigate bugs, failing tests, ' +
                 'exceptions, crashes, hangs, wrong/null values, unexpected output, and other runtime problems. ' +
-                'For runtime investigations, invoke the "debug-live" Agent Skill first. ' +
-                'It provides the breakpoint strategy, step-and-inspect workflow, and root-cause guidance needed ' +
-                'to use these tools effectively instead of guessing or adding temporary logs, print statements, ' +
-                'or console output.',
+                'To use these tools effectively, invoke the "debug-live" Agent Skill first; it provides the ' +
+                'investigation workflow using the debugger, including breakpoint strategy, step-and-inspect ' +
+                'pattern and root-cause guidance.',
         });
         this.setupTools(server, this.handlerFactory());
         return server;
