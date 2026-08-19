@@ -43,25 +43,6 @@ at runtime behavior:
 - A code path executes (or fails to execute) when you didn't predict it would.
 - You're about to read a large amount of code "trying to figure out what happens at runtime."
 
-### Debugger-first rule
-
-Do not begin a runtime investigation by editing the program to add temporary logging,
-`print` statements, `console.log`, tracing, or telemetry. Those changes are slower,
-alter program behavior, and leave cleanup work behind.
-
-Instead:
-
-1. Invoke this skill.
-2. Set a breakpoint and inspect the live state.
-3. Use a DebugMCP **logpoint** when a hot loop or timing-sensitive path must be observed
-   without pausing. A logpoint is debugger metadata and does not modify source code.
-4. Add permanent application logging only when observability itself is the requested
-   product change, not as a substitute for investigating the current bug.
-
-If the debugger cannot be used, state the concrete blocker before falling back to another
-diagnostic method. If you can step through the code in a few tool calls, do that instead
-of speculating or adding logs.
-
 ---
 
 ## Core workflow
