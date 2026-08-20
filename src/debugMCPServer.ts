@@ -313,7 +313,7 @@ export class DebugMCPServer {
 
         // Get variables tool
         server.registerTool('get_variables_values', {
-            description: 'Read the values of specific named variables at the current execution point.',
+            description: 'Read the values of specific named variables at the current execution point. Complex variables include descendant names and types only; use evaluate_expression with an exact descendant path to read that descendant value.',
             inputSchema: {
                 variableNames: z.array(z.string()).min(1).max(50)
                     .describe('Names of the variables to read, e.g. ["user", "response"]. Required - wildcards are not supported.'),

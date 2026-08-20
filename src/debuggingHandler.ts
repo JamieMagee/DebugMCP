@@ -5,7 +5,14 @@ import { DebugConfigurationManager, IDebugConfigurationManager } from './utils/d
 import { DebugState } from './debugState';
 import { IDebuggingExecutor } from './debuggingExecutor';
 import { logger } from './utils/logger';
-import { redactExpressionResult, redactVariableValue, REDACTION_NOTICE } from './utils/secretRedaction';
+import {
+    isSensitiveExpression,
+    isSensitiveName,
+    redactExpressionResult,
+    redactVariableValue,
+    REDACTION_NOTICE,
+    REDACTION_PLACEHOLDER
+} from './utils/secretRedaction';
 
 /**
  * Interface for debugging handler operations
@@ -427,6 +434,8 @@ export class DebuggingHandler implements IDebuggingHandler {
      * tool a targeted lookup rather than a scope dump by another name.
      */
     private readonly maxRequestedVariables: number = 50;
+    private readonly maxVariableExpansionDepth: number = 6;
+    private readonly maxExpandedFields: number = 100;
 
     /**
      * Resolve the frame to inspect, failing with an actionable message when the
@@ -515,6 +524,34 @@ export class DebuggingHandler implements IDebuggingHandler {
         return requestedNames.includes(DebuggingHandler.canonicalVariableName(variable));
     }
 
+    private static redactionVariableName(variable: any, canonicalName: string): string {
+        const displayName = typeof variable?.name === 'string' ? variable.name : canonicalName;
+        const canonicalMember = canonicalName.match(/(?:^|\.|->)([A-Za-z_][A-Za-z0-9_]*)$/);
+        if (canonicalMember) {
+            return canonicalMember[1];
+        }
+
+        const displayMember = displayName.match(/(?:^|\.|->)([A-Za-z_][A-Za-z0-9_]*)$/);
+        return displayMember?.[1] ?? displayName;
+    }
+
+    private static displayVariableType(variable: any): string | undefined {
+        if (typeof variable?.type !== 'string') {
+            return undefined;
+        }
+
+        // Cortex-Debug appends index and numeric renderings to scalar types:
+        // "uint8_t 0;\ndec: 70\nhex: 0x46...".
+        return variable.type.split(/\r?\n/, 1)[0].replace(/\s+\d+;$/, '').trim() || undefined;
+    }
+
+    private static isPointerLikeType(type: unknown): boolean {
+        if (typeof type !== 'string') {
+            return false;
+        }
+        return /[*&]\s*$/.test(type.split(/\r?\n/, 1)[0].trim());
+    }
+
     /**
      * List the variable names (and types) visible at the current execution
      * point, deliberately without any values, so an agent can discover what
@@ -576,6 +613,7 @@ export class DebuggingHandler implements IDebuggingHandler {
             let variablesInfo = 'Variables:\n==========\n\n';
             let redactedAny = false;
             const foundNames = new Set<string>();
+            const expansionBudget = { remaining: this.maxExpandedFields };
 
             for (const scopeItem of variablesData.scopes) {
                 const matches = (scopeItem.variables || []).filter((variable: any) =>
@@ -599,14 +637,16 @@ export class DebuggingHandler implements IDebuggingHandler {
                         // then told that name was not found.
                         foundNames.add(variable.name);
                     }
-                    const result = redactVariableValue(name, variable.value);
-                    const value = result.value;
-                    redactedAny = redactedAny || result.redacted;
-                    variablesInfo += `  ${name}: ${value}`;
-                    if (variable.type) {
-                        variablesInfo += ` (${variable.type})`;
-                    }
-                    variablesInfo += '\n';
+                    const formatted = await this.formatVariableTree(
+                        variable,
+                        '  ',
+                        0,
+                        new Set<number>(),
+                        true,
+                        expansionBudget
+                    );
+                    variablesInfo += `${formatted.text}\n`;
+                    redactedAny = redactedAny || formatted.redacted;
                 }
                 variablesInfo += '\n';
             }
@@ -651,22 +691,152 @@ export class DebuggingHandler implements IDebuggingHandler {
 
             if (response && response.result !== undefined) {
                 let resultText = `Expression: ${expression}\n`;
-                const { value, redacted } = redactExpressionResult(expression, response.result);
+                const isComplex = response.variablesReference > 0 &&
+                    !DebuggingHandler.isPointerLikeType(response.type);
+                const expressionIsSensitive = isSensitiveExpression(expression);
+                const { value, redacted } = isComplex
+                    ? {
+                        value: expressionIsSensitive ? REDACTION_PLACEHOLDER : '<complex value>',
+                        redacted: expressionIsSensitive
+                    }
+                    : redactExpressionResult(expression, response.result);
                 resultText += `Result: ${value}`;
                 if (response.type) {
                     resultText += ` (${response.type})`;
+                }
+                if (!redacted && isComplex) {
+                    const children = await this.formatVariableChildren(
+                        response.variablesReference,
+                        '  ',
+                        1,
+                        new Set<number>(),
+                        { remaining: this.maxExpandedFields }
+                    );
+                    if (children.text) {
+                        resultText += `\n${children.text}`;
+                    }
+                    if (children.redacted) {
+                        resultText += `\n\n${REDACTION_NOTICE}`;
+                    }
                 }
                 if (redacted) {
                     resultText += `\n\n${REDACTION_NOTICE}`;
                 }
 
                 return resultText;
+            } else if (response && typeof response.output === 'string') {
+                if (response.output.trim().length > 0) {
+                    const { value, redacted } = redactExpressionResult(expression, response.output);
+                    return `Expression: ${expression}\nResult: ${value}` +
+                        (redacted ? `\n\n${REDACTION_NOTICE}` : '');
+                }
+                if (response.resultClass === 'done') {
+                    throw new Error(
+                        'The debug adapter reported success but returned no expression result or captured output.'
+                    );
+                }
+                throw new Error(
+                    `The debug adapter returned no expression result (resultClass: ${response.resultClass || 'unknown'}).`
+                );
             } else {
-                throw new Error('Failed to evaluate expression');
+                throw new Error('The debug adapter returned no expression result.');
             }
         } catch (error) {
             throw new Error(`Error evaluating expression: ${error}`);
         }
+    }
+
+    private async formatVariableTree(
+        variable: any,
+        indent: string,
+        depth: number,
+        visitedReferences: Set<number>,
+        includeValue: boolean,
+        expansionBudget: { remaining: number }
+    ): Promise<{ text: string; redacted: boolean }> {
+        const name = DebuggingHandler.canonicalVariableName(variable);
+        let text = `${indent}${name}`;
+        let redacted = false;
+        const variablesReference = Number(variable.variablesReference) || 0;
+        const isComplex = variablesReference > 0 &&
+            !DebuggingHandler.isPointerLikeType(variable.type);
+        if (includeValue && isComplex) {
+            const redactionName = DebuggingHandler.redactionVariableName(variable, name);
+            if (isSensitiveName(redactionName)) {
+                text += `: ${REDACTION_PLACEHOLDER}`;
+                redacted = true;
+            }
+        } else if (includeValue) {
+            const redactionName = DebuggingHandler.redactionVariableName(variable, name);
+            const result = redactVariableValue(redactionName, variable.value);
+            text += `: ${result.value}`;
+            redacted = result.redacted;
+        }
+        const type = DebuggingHandler.displayVariableType(variable);
+        if (type) {
+            text += ` (${type})`;
+        }
+
+        if (!redacted && isComplex) {
+            const children = await this.formatVariableChildren(
+                variablesReference,
+                `${indent}  `,
+                depth + 1,
+                visitedReferences,
+                expansionBudget
+            );
+            if (children.text) {
+                text += `\n${children.text}`;
+            }
+            return { text, redacted: children.redacted };
+        }
+
+        return { text, redacted };
+    }
+
+    private async formatVariableChildren(
+        variablesReference: number,
+        indent: string,
+        depth: number,
+        visitedReferences: Set<number>,
+        expansionBudget: { remaining: number }
+    ): Promise<{ text: string; redacted: boolean }> {
+        if (depth > this.maxVariableExpansionDepth) {
+            return { text: `${indent}<maximum expansion depth reached>`, redacted: false };
+        }
+        if (visitedReferences.has(variablesReference)) {
+            return { text: `${indent}<cyclic reference>`, redacted: false };
+        }
+
+        const nextVisited = new Set(visitedReferences);
+        nextVisited.add(variablesReference);
+        const children = await this.executor.getVariableChildren(variablesReference);
+        const rendered: string[] = [];
+        let redacted = false;
+        let renderedChildren = 0;
+
+        for (const child of children) {
+            if (expansionBudget.remaining === 0) {
+                break;
+            }
+            expansionBudget.remaining--;
+            renderedChildren++;
+            const formatted = await this.formatVariableTree(
+                child,
+                indent,
+                depth,
+                nextVisited,
+                false,
+                expansionBudget
+            );
+            rendered.push(formatted.text);
+            redacted = redacted || formatted.redacted;
+        }
+        if (children.length > renderedChildren) {
+            rendered.push(`${indent}<${children.length - renderedChildren} more child variable(s)>`);
+        }
+
+        return { text: rendered.join('\n'), redacted };
     }
 
     /**
