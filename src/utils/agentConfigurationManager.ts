@@ -606,7 +606,10 @@ export class AgentConfigurationManager {
         quickPick.canSelectMany = true;
         quickPick.ignoreFocusOut = true;
 
+        let accepted = false;
+
         quickPick.onDidAccept(async () => {
+            accepted = true;
             const selectedItems = quickPick.selectedItems;
             quickPick.hide();
 
@@ -627,7 +630,12 @@ export class AgentConfigurationManager {
             await this.context.globalState.update(this.POPUP_SHOWN_KEY, true);
         });
 
-        quickPick.onDidHide(() => quickPick.dispose());
+        quickPick.onDidHide(async () => {
+            quickPick.dispose();
+            if (!accepted) {
+                await this.context.globalState.update(this.POPUP_SHOWN_KEY, true);
+            }
+        });
         quickPick.show();
     }
 

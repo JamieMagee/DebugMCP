@@ -150,6 +150,7 @@ suite('DebuggingHandler waitForStateChange (event-driven)', () => {
             removeBreakpoint: async () => { /* noop */ },
             getCurrentDebugState: async () => getState(call++),
             getVariables: async () => ({}),
+            getVariableChildren: async () => [],
             evaluateExpression: async () => ({}),
             getBreakpoints: () => [],
             clearAllBreakpoints: () => { /* noop */ },

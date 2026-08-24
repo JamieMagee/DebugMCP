@@ -80,6 +80,7 @@ function makeMocks(opts: MockOpts) {
         addBreakpoint: async () => { /* noop */ },
         removeBreakpoint: async () => { /* noop */ },
         getVariables: async () => ({}),
+        getVariableChildren: async () => [],
         evaluateExpression: async () => ({}),
         getBreakpoints: () => [],
         clearAllBreakpoints: () => { /* noop */ },

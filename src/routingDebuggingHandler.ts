@@ -220,8 +220,12 @@ export class RoutingDebuggingHandler implements IDebuggingHandler {
 		return this.forward('handleListBreakpoints', {});
 	}
 
-	public handleGetVariables(args: { scope?: 'local' | 'global' | 'all' }): Promise<string> {
+	public handleGetVariables(args: { variableNames: string[]; scope?: 'local' | 'global' | 'all' }): Promise<string> {
 		return this.forward('handleGetVariables', args);
+	}
+
+	public handleListVariableNames(args: { scope?: 'local' | 'global' | 'all' } = {}): Promise<string> {
+		return this.forward('handleListVariableNames', args);
 	}
 
 	public handleEvaluateExpression(args: { expression: string }): Promise<string> {

@@ -4,7 +4,7 @@ Let AI agents debug your code inside VS Code - set breakpoints, step through exe
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.104.0+-blue.svg)](https://code.visualstudio.com/)
-[![Version](https://img.shields.io/badge/version-2.2.4-green.svg)](https://github.com/microsoft/DebugMCP)
+[![Version](https://img.shields.io/badge/version-2.3.2-green.svg)](https://github.com/microsoft/DebugMCP)
 [![VS Marketplace](https://img.shields.io/badge/VS%20Marketplace-Install-blue.svg)](https://marketplace.visualstudio.com/items?itemName=ozzafar.debugmcpextension)
 
 > ⭐ **If you find DebugMCP useful, please [star the repo on GitHub](https://github.com/microsoft/DebugMCP)!** It helps others discover the project and motivates continued development.
@@ -65,8 +65,9 @@ DebugMCP is an MCP server that gives AI coding agents full control over the VS C
 | **remove_breakpoint** | Remove a breakpoint from a specific line | `fileFullPath` (required)<br>`line` (required) |
 | **clear_all_breakpoints** | Remove all breakpoints at once | None |
 | **list_breakpoints** | List all active breakpoints | None |
-| **get_variables_values** | Get variables and their values at current execution point | `scope` (optional: 'local', 'global', 'all') |
-| **evaluate_expression** | Evaluate an expression in debug context | `expression` (required) |
+| **list_variable_names** | List names and types of variables in scope, without reading any values | `scope` (optional: 'local', 'global', 'all') |
+| **get_variables_values** | Get the values of specifically named variables at the current execution point | `variableNames` (required, e.g. `["user","response"]`)<br>`scope` (optional: 'local', 'global', 'all') |
+| **evaluate_expression** | Evaluate an expression in debug context; expandable children are listed by name and type without their values | `expression` (required) |
 
 > **Note:** The MCP server exposes **tools** for debugger actions, while the procedural
 > workflow guidance (when to debug, how to structure a root-cause investigation,
@@ -301,10 +302,12 @@ Configure DebugMCP behavior in VSCode settings:
 
 ### Security model
 
-DebugMCP exposes powerful debugger primitives (`evaluate_expression`, `start_debugging`, …) over an unauthenticated local HTTP endpoint. To keep that surface safe, the server enforces two controls:
+DebugMCP exposes powerful debugger primitives (`evaluate_expression`, `start_debugging`, …) over an unauthenticated local HTTP endpoint. To keep that surface safe, the server enforces four controls:
 
 1. **Loopback-only bind.** The HTTP server binds to the IPv4 and IPv6 loopback addresses (`127.0.0.1` and `::1`) by default, so other hosts on your network cannot reach `http://<your-ip>:3001/mcp`. Binding both families ensures clients that resolve `localhost` to either family connect successfully. The `debugmcp.bindHost` setting (string or array of strings) lets you opt into a different interface (for example, when forwarding the port into a remote container), but doing so exposes the unauthenticated debugger to anything that can route to that address — do not point it at `0.0.0.0` or a LAN address on an untrusted network.
 2. **Host / Origin header validation.** Every request must carry a `Host` header naming a loopback address (`localhost`, `127.0.0.1`, or `[::1]`); any port suffix in the `Host` must also match the server's listening port. Requests with any other `Host` — including those that arrive via DNS rebinding from a malicious webpage — are rejected with HTTP 403. The same loopback check is applied to the `Origin` header when present.
+3. **Least-privilege variable inspection.** `get_variables_values` requires an explicit `variableNames` list (max 50, no wildcards) and returns only those variables. It no longer dumps every variable in scope, which previously handed the agent unrelated process state that it never asked for. Use `list_variable_names` to discover what exists; that tool returns names and types only and never reads a value.
+4. **Secret redaction on variable inspection.** Values with credential-bearing names or values matching a known credential shape are replaced with `<redacted: possible secret>` before the response leaves the extension. The evaluated result returned by `evaluate_expression` is covered too. When `get_variables_values` or `evaluate_expression` expands a complex value, descendants are listed by name and type only. Use `evaluate_expression` with an exact descendant path when its value is needed. Recursive expansion is capped at 100 child fields total per response. Null-ish values (`None`, `undefined`, `''`) are never redacted so "my token is empty" bugs remain debuggable. Redaction is always on and cannot be turned off.
 
 
 ## FAQ
@@ -473,11 +476,11 @@ If DebugMCP has helped you debug faster, please consider giving it a star on Git
 
 ### Star History
 
-<a href="https://star-history.com/#microsoft/DebugMCP&Date">
+<a href="https://star-history.dera.page/#microsoft/DebugMCP&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=microsoft/DebugMCP&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=microsoft/DebugMCP&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=microsoft/DebugMCP&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=microsoft/DebugMCP&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=microsoft/DebugMCP&type=Date" />
+   <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=microsoft/DebugMCP&type=Date" />
  </picture>
 </a>
 

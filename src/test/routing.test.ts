@@ -33,6 +33,7 @@ class RecordingHandler implements IDebuggingHandler {
 	handleClearAllBreakpoints() { return this.record('clearBp', {}); }
 	handleListBreakpoints() { return this.record('listBp', {}); }
 	handleGetVariables(args: any) { return this.record('vars', args); }
+	handleListVariableNames(args?: any) { return this.record('varNames', args ?? {}); }
 	handleEvaluateExpression(args: any) { return this.record('eval', args); }
 }
 
@@ -101,7 +102,7 @@ suite('Multi-window routing', () => {
 		const routing = new RoutingDebuggingHandler(new WorkspaceRegistry(process.pid, dir));
 		await routing.handleStartDebugging({ fileFullPath: path.join(repoA, 'm.py'), workingDirectory: repoA });
 		const stepped = await routing.handleStepOver();
-		const vars = await routing.handleGetVariables({ scope: 'local' });
+		const vars = await routing.handleGetVariables({ variableNames: ['x'], scope: 'local' });
 
 		assert.strictEqual(stepped, 'A:stepOver');
 		assert.strictEqual(vars, 'A:vars');

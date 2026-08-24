@@ -1,6 +1,6 @@
 ---
 name: debug-live
-description: Drive an interactive VS Code debugger to investigate bugs, failing tests, wrong/null variable values, unexpected runtime behavior, and other "it doesn't work" reports. Use this skill whenever speculation about runtime behavior would be cheaper to *verify* by stepping through the code than to reason about. Pairs with the DebugMCP MCP server, which exposes the underlying breakpoint / step / inspect tools.
+description: Guides root-cause investigations with debugging capabilities by setting breakpoints, starting a debug session, stepping through execution, inspecting variables, and tracing symptoms back to their origin. Prefer it for runtime bugs, failing tests, exceptions, crashes, hangs, wrong/null values, and unexpected output when live inspection is practical. Use this skill instead of modifying source code with temporary logs, print statements, or console output.
 license: MIT
 allowed-tools:
   - add_breakpoint
@@ -16,6 +16,7 @@ allowed-tools:
   - step_out
   - continue_execution
   - pause_execution
+  - list_variable_names
   - get_variables_values
   - evaluate_expression
 ---
@@ -33,15 +34,14 @@ analysis framework*, and *language-specific guidance* live here.
 
 ## When to invoke this skill
 
-Reach for this skill whenever you would otherwise *guess* at runtime behavior:
+Invoke this skill as the **first investigation step** whenever you would otherwise guess
+at runtime behavior:
 
 - Any reported bug, failing test, exception, or unexpected output.
 - A variable holds an unexpected `null` / `undefined` / wrong type / wrong value.
 - A function returns something the caller didn't expect.
 - A code path executes (or fails to execute) when you didn't predict it would.
 - You're about to read a large amount of code "trying to figure out what happens at runtime."
-
-If you can step through the code in a few tool calls, do that instead of speculating.
 
 ---
 
@@ -60,9 +60,15 @@ If you can step through the code in a few tool calls, do that instead of specula
 4. **Navigate and inspect.** Use `step_over`, `step_into`, `step_out`, `continue_execution`
    to move through code. Use `pause_execution` to interrupt a freely-running program
    (e.g. a busy loop or embedded target) when there is no breakpoint to stop at.
-   Use `get_variables_values` to see local/global state and
+   Use `list_variable_names` to see what is in scope (names and types only, no values),
+   then `get_variables_values` with the specific `variableNames` you care about, and
    `evaluate_expression` to test hypotheses live (call methods, read properties, run
    list comprehensions, etc.).
+
+   > `get_variables_values` **requires** explicit `variableNames` — it will not dump the
+   > whole scope. This is deliberate: a scope dump hands you unrelated process state such
+   > as API keys, tokens and environment variables. Values that still look like credentials
+   > are replaced with `<redacted: possible secret>`; don't try to work around it.
 5. **Find the root cause** (see framework below). Don't stop at the first wrong thing
    you see — trace it back to *why*.
 6. **Clean up.** Call `clear_all_breakpoints` when you're done so you don't pollute the
@@ -189,7 +195,8 @@ Before ending the debug session, confirm you can answer:
 add_breakpoint  fileFullPath=/repo/src/calculate.py  line=42
 start_debugging fileFullPath=/repo/src/calculate.py  workingDirectory=/repo
 # session pauses on the breakpoint
-get_variables_values scope=local
+list_variable_names  scope=local
+get_variables_values variableNames=["raw","total"] scope=local
 evaluate_expression  expression="type(raw).__name__"
 step_into
 # … iterate until root cause found …
@@ -202,7 +209,8 @@ add_breakpoint  fileFullPath=C:\Repo\Calculator.Tests\CalculatorTests.cs  line=1
 start_debugging fileFullPath=C:\Repo\Calculator.Tests\CalculatorTests.cs  workingDirectory=C:\Repo  testName=Add_ReturnsSum
 # pauses inside the test
 step_into
-get_variables_values
+list_variable_names
+get_variables_values variableNames=["result","expected"]
 ```
 
 ### Verifying a fix without re-launching VS Code
@@ -233,6 +241,9 @@ launch), and common pitfalls.
 
 ## Things to avoid
 
+- ❌ **Adding temporary logs, print statements, or console output before debugging.**
+  Invoke this skill and inspect live state first. Use a debugger logpoint for non-breaking
+  observation.
 - ❌ **Speculating about runtime values when you could just inspect them.** That's what
   `get_variables_values` and `evaluate_expression` are for.
 - ❌ **Calling `start_debugging` without first setting a breakpoint.** The program will

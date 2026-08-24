@@ -166,10 +166,11 @@ export class DebugMCPServer {
             // Surfaced to clients at `initialize`. Points agents at the
             // `debug-live` Agent Skill, which the extension installs into the
             // standard skills directories for harnesses that load skills.
-            instructions: 'These tools drive the VS Code debugger to investigate bugs, failing tests, ' +
-                'wrong/null values and other "it doesn\'t work" reports by stepping through code. ' +
-                'The companion "debug-live" Agent Skill describes the full interactive workflow: ' +
-                'when to set breakpoints, how to step and inspect state, and how to do root-cause analysis.',
+            instructions: 'These tools drive the debugger to investigate bugs, failing tests, ' +
+                'exceptions, crashes, hangs, wrong/null values, unexpected output, and other runtime problems. ' +
+                'To use these tools effectively, invoke the "debug-live" Agent Skill first; it provides the ' +
+                'investigation workflow using the debugger, including breakpoint strategy, step-and-inspect ' +
+                'pattern and root-cause guidance.',
         });
         this.setupTools(server, this.handlerFactory());
         return server;
@@ -205,9 +206,8 @@ export class DebugMCPServer {
     private setupTools(server: McpServer, debuggingHandler: IDebuggingHandler) {
         // Start debugging tool
         server.registerTool('start_debugging', {
-            description: 'Start a VS Code debug session for a source file, optionally for a single test method. ' +
-                'Use when investigating bugs, failing tests, wrong/null variable values, unexpected runtime behavior, ' +
-                'or any "it doesn\'t work" report. See the "debug-live" skill for the full investigation workflow.',
+            description: 'Start a VS Code debug session for a source file or for a single test method. ' +
+                'Invoke the "debug-live" skill first.',
             inputSchema: {
                 fileFullPath: z.string().describe('Full path to the source code file to debug'),
                 workingDirectory: z.string().describe('Working directory for the debug session'),
@@ -261,7 +261,7 @@ export class DebugMCPServer {
 
         // Add breakpoint tool
         server.registerTool('add_breakpoint', {
-            description: 'Set a breakpoint to pause execution at a critical line of code. Essential for debugging: pause before potential errors, examine state at decision points, or verify code paths. Breakpoints let you inspect variables and control flow at exact moments. Provide an optional condition to create a conditional breakpoint that only pauses when the expression evaluates to true (e.g. "i == 5" or "user.id === null").',
+            description: 'Set a breakpoint to pause execution at a critical line of code. Breakpoints let you inspect variables and control flow at exact moments.',
             inputSchema: {
                 fileFullPath: z.string().describe('Full path to the file'),
                 line: z.number().int().describe('Line number (1-based) where the breakpoint should be set'),
@@ -272,7 +272,7 @@ export class DebugMCPServer {
 
         // Add logpoint tool
         server.registerTool('add_logpoint', {
-            description: 'Add a logpoint: a breakpoint that logs a message instead of pausing execution. Ideal for tracing values across many iterations or hot paths without stopping, or where a hard pause would distort timing. Embed expressions in curly braces to interpolate runtime values, e.g. "user id={user.id}, count={items.length}". Provide an optional condition to only log when it evaluates to true.',
+            description: 'Add a logpoint: a breakpoint that logs a message instead of pausing execution. Ideal for tracing values across many iterations or hot paths without stopping, or where a hard pause would distort timing. Embed expressions in curly braces to interpolate runtime values, e.g. "user id={user.id}".',
             inputSchema: {
                 fileFullPath: z.string().describe('Full path to the file'),
                 line: z.number().int().describe('Line number (1-based) where the logpoint should be set'),
@@ -302,18 +302,29 @@ export class DebugMCPServer {
             description: 'View all currently set breakpoints across all files.',
         }, async () => this.runTool('list_breakpoints', () => debuggingHandler.handleListBreakpoints()));
 
-        // Get variables tool
-        server.registerTool('get_variables_values', {
-            description: 'Inspect all variable values at the current execution point. This is your window into program state - see what data looks like at runtime, verify assumptions, identify unexpected values, and understand why code behaves as it does.',
+        // List variable names tool (discovery without reading any values)
+        server.registerTool('list_variable_names', {
+            description: 'List the names and types of variables visible at the current execution point, without reading their values. Use this to discover what exists, then request the variables you actually need with get_variables_values.',
             inputSchema: {
                 scope: z.enum(['local', 'global', 'all']).optional().describe("Variable scope: 'local', 'global', or 'all'"),
             },
         }, async (args: { scope?: 'local' | 'global' | 'all' }) =>
+            this.runTool('list_variable_names', () => debuggingHandler.handleListVariableNames(args)));
+
+        // Get variables tool
+        server.registerTool('get_variables_values', {
+            description: 'Read the values of specific named variables at the current execution point. Complex variables include descendant names and types only; use evaluate_expression with an exact descendant path to read that descendant value.',
+            inputSchema: {
+                variableNames: z.array(z.string()).min(1).max(50)
+                    .describe('Names of the variables to read, e.g. ["user", "response"]. Required - wildcards are not supported.'),
+                scope: z.enum(['local', 'global', 'all']).optional().describe("Variable scope: 'local', 'global', or 'all'"),
+            },
+        }, async (args: { variableNames: string[]; scope?: 'local' | 'global' | 'all' }) =>
             this.runTool('get_variables_values', () => debuggingHandler.handleGetVariables(args)));
 
         // Evaluate expression tool
         server.registerTool('evaluate_expression', {
-            description: 'Powerful runtime expression evaluator: Test hypotheses, check computed values, call methods, or inspect object properties in the live debug context. Goes beyond simple variable inspection - evaluate any valid expression in the target language.',
+            description: 'Powerful runtime expression evaluator: Test hypotheses, check computed values, call methods, or inspect object properties in the live debug context. Evaluate any valid expression in the target language.',
             inputSchema: {
                 expression: z.string().describe('Expression to evaluate in the current programming language context'),
             },
