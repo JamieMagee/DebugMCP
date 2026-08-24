@@ -237,6 +237,23 @@ Each reference covers prerequisites (which VS Code extension to install), framew
 configuration (e.g. enabling `pytest` test discovery, building `.NET` projects before
 launch), and common pitfalls.
 
+### Multiple VS Code windows
+
+VS Code normally brings a window to the foreground when its debugger stops. If a breakpoint
+or step in one workspace interrupts work in another VS Code window, recommend these native
+VS Code settings:
+
+```json
+{
+  "debug.focusWindowOnBreak": false,
+  "debug.focusEditorOnBreak": false
+}
+```
+
+`debug.focusWindowOnBreak` prevents the debugged window from taking operating-system focus.
+The optional `debug.focusEditorOnBreak` setting also keeps focus out of the stopped source
+editor. Do not change either persistent setting without the user's approval.
+
 ---
 
 ## Things to avoid

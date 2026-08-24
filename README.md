@@ -4,7 +4,7 @@ Let AI agents debug your code inside VS Code - set breakpoints, step through exe
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.104.0+-blue.svg)](https://code.visualstudio.com/)
-[![Version](https://img.shields.io/badge/version-2.3.2-green.svg)](https://github.com/microsoft/DebugMCP)
+[![Version](https://img.shields.io/badge/version-2.3.3-green.svg)](https://github.com/microsoft/DebugMCP)
 [![VS Marketplace](https://img.shields.io/badge/VS%20Marketplace-Install-blue.svg)](https://marketplace.visualstudio.com/items?itemName=ozzafar.debugmcpextension)
 
 > ⭐ **If you find DebugMCP useful, please [star the repo on GitHub](https://github.com/microsoft/DebugMCP)!** It helps others discover the project and motivates continued development.
@@ -377,6 +377,17 @@ Yes. DebugMCP supports `.cs` files and `.csproj` project files for C#/.NET debug
   - Ensure the correct file is being debugged
   - Check that the breakpoint line number is correct
   - Verify the relevant language debugger extension is installed
+
+#### Another VS Code Window Takes Focus When Debugging Stops
+- **Symptom**: With multiple VS Code windows open, the window being debugged comes to the foreground when it hits a breakpoint or completes a step
+- **Solution**: Disable VS Code's native focus-on-break behavior in your user or workspace settings:
+  ```json
+  {
+    "debug.focusWindowOnBreak": false,
+    "debug.focusEditorOnBreak": false
+  }
+  ```
+  `debug.focusWindowOnBreak` prevents the debugged window from taking operating-system focus. The optional `debug.focusEditorOnBreak` setting also prevents VS Code from moving focus into the stopped source editor. DebugMCP does not change these persistent preferences automatically.
 
 #### Configuration Not Auto-Detected
 - **Symptom**: Extension doesn't prompt to register with your AI assistant
