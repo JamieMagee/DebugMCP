@@ -378,6 +378,17 @@ Yes. DebugMCP supports `.cs` files and `.csproj` project files for C#/.NET debug
   - Check that the breakpoint line number is correct
   - Verify the relevant language debugger extension is installed
 
+#### Another VS Code Window Takes Focus When Debugging Stops
+- **Symptom**: With multiple VS Code windows open, the window being debugged comes to the foreground when it hits a breakpoint or completes a step
+- **Solution**: Disable VS Code's native focus-on-break behavior in your user or workspace settings:
+  ```json
+  {
+    "debug.focusWindowOnBreak": false,
+    "debug.focusEditorOnBreak": false
+  }
+  ```
+  `debug.focusWindowOnBreak` prevents the debugged window from taking operating-system focus. The optional `debug.focusEditorOnBreak` setting also prevents VS Code from moving focus into the stopped source editor. DebugMCP does not change these persistent preferences automatically.
+
 #### Configuration Not Auto-Detected
 - **Symptom**: Extension doesn't prompt to register with your AI assistant
 - **Solution**:
