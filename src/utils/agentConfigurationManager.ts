@@ -563,7 +563,8 @@ export class AgentConfigurationManager {
                 console.error(`Failed to parse existing config for ${agent.name}:`, error);
                 const openConfigButton = 'Open Config';
                 const result = await vscode.window.showErrorMessage(
-                    `Failed to configure DebugMCP for ${agent.displayName}: the existing configuration contains invalid JSON.`,
+                    `Failed to configure DebugMCP for ${agent.displayName}: the existing configuration contains invalid JSON. ` +
+                    'Fix the JSON, then run "DebugMCP: Show Agent Selection Popup" from the Command Palette to retry setup.',
                     openConfigButton
                 );
 
