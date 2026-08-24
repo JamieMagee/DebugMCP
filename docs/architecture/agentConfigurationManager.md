@@ -13,8 +13,13 @@ For AI agents to use DebugMCP, they need MCP server configuration in their setti
 - Detect supported AI agents and their config file paths
 - Show post-install popup for agent selection
 - Write MCP server configuration to agent settings files
+- Preserve existing JSON configuration files when they cannot be parsed
 - Handle cross-platform config path differences (Windows, macOS, Linux)
 - Track whether onboarding popup has been shown
+
+When an existing JSON configuration is malformed, setup leaves it unchanged and offers to
+open the file. The error also directs users to rerun **DebugMCP: Show Agent Selection
+Popup** from the Command Palette after correcting the JSON.
 
 ## Supported Agents
 
